@@ -31,25 +31,21 @@ if not WEBHOOK_SECRET or not APP_BASE_URL:
 
 UCA_QUERY = """
     SELECT
-        UPPER(TRIM(Atual.n_armac))   AS n_armac,
-        Atual.tipo_equipamento       AS equipamento,
-        UPPER(TRIM(Atual.marca))     AS marca,
-        UPPER(TRIM(Atual.modelo))    AS modelo,
-        Atual.cliente                AS cliente,
-        Atual.situacao               AS situacao,
-        Atual.created_at_form        AS data_entrada,
-        Atual.horimetro              AS horimetro,
-        Atual.filial                 AS filial
-    FROM fastfield.relatorio_entrada_saida_uca Atual
-    INNER JOIN (
-        SELECT n_armac, MAX(created_at_form) AS ultima_data
-        FROM fastfield.relatorio_entrada_saida_uca
-        WHERE n_armac IS NOT NULL
-        GROUP BY n_armac
-    ) UltimoRegistro
-      ON Atual.n_armac = UltimoRegistro.n_armac
-     AND Atual.created_at_form = UltimoRegistro.ultima_data
-    WHERE Atual.tipo_relatorio = 'Entrada'
+        UPPER(TRIM(n_armac))   AS n_armac,
+        tipo_relatorio         AS tipo_relatorio,
+        tipo_equipamento       AS equipamento,
+        UPPER(TRIM(marca))     AS marca,
+        UPPER(TRIM(modelo))    AS modelo,
+        cliente                AS cliente,
+        situacao               AS situacao,
+        created_at_form        AS data_entrada,
+        horimetro              AS horimetro,
+        filial                 AS filial
+    FROM fastfield.relatorio_entrada_saida_uca
+    WHERE n_armac IS NOT NULL
+      AND created_at_form IS NOT NULL
+    ORDER BY created_at_form DESC
+    LIMIT 50000
 """
 
 def now_utc_iso() -> str:
@@ -103,15 +99,38 @@ def post_json(path: str, body: dict) -> dict:
 def main() -> int:
     started_at = now_utc_iso()
     try:
-        rows = fetch_mysql(UCA_QUERY)
-        payload = {"started_at": started_at,
-                   "rows": [{k: jsonable(v) for k, v in r.items()} for r in rows]}
-        
+        registros = fetch_mysql(UCA_QUERY)
+        eventos = [
+            {
+                "n_armac": jsonable(r.get("n_armac")),
+                "tipo_relatorio": jsonable(r.get("tipo_relatorio")),
+                "ts": jsonable(r.get("data_entrada")),
+                "filial": jsonable(r.get("filial")),
+                "cliente": jsonable(r.get("cliente")),
+                "horimetro": jsonable(r.get("horimetro")),
+            }
+            for r in registros
+        ]
+
+        # rows = quem esta na filial agora: ultimo registro do ativo e' "Entrada".
+        ultimo: dict[str, dict] = {}
+        for r in registros:  # ja vem ordenado do mais novo para o mais antigo
+            codigo = (r.get("n_armac") or "").strip()
+            if codigo and codigo not in ultimo:
+                ultimo[codigo] = r
+        rows = [
+            {k: jsonable(v) for k, v in r.items() if k != "tipo_relatorio"}
+            for r in ultimo.values()
+            if str(r.get("tipo_relatorio") or "").strip().lower().startswith("entrada")
+        ]
+
+        payload = {"started_at": started_at, "rows": rows, "eventos": eventos}
+
         result = post_json("/api/public/hooks/sync-ativos-bh", payload)
         
         if not result.get("ok"):
             raise RuntimeError(f"app respondeu sem ok: {result}")
-        print(f"[UCA] ok · {len(rows)} linhas · {result.get('message') or ''}", flush=True)
+        print(f"[UCA] ok · {len(rows)} na filial / {len(eventos)} eventos · {result.get('message') or ''}", flush=True)
         return 0
     except Exception as exc:
         print(f"[UCA] erro · {exc}", file=sys.stderr, flush=True)
