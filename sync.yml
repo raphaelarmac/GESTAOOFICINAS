@@ -1,0 +1,111 @@
+name: Central de Atualizações — Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Job específico (vazio = grupo padrão)"
+        required: false
+        type: choice
+        options:
+          - ""
+          - ordens_servico
+          - os_operacoes
+          - equipamentos
+          - os_suprimentos
+          - suprimentos_compras
+          - uca_patio
+          - uca_historico
+          - horimetros
+          - horimetros_invalidos
+          - reservas_separacao
+          - aprovacao_pedidos
+          - pagamento_pedidos
+          - migo_recebimentos
+          - pecas_historico
+      ini:
+        description: "Janela ini (dias p/ trás) — só p/ jobs com parâmetro"
+        required: false
+      fim:
+        description: "Janela fim (dias p/ trás)"
+        required: false
+  schedule:
+    # UTC! 08:00 UTC = 05:00 BRT. Frequências por peso:
+    - cron: "0 9,13,17,21 * * 1-6"   # grupo "operacao" (4x/dia, seg-sáb)
+    - cron: "30 8 * * 1-6"           # grupo "pesado"   (1x/dia, antes do expediente)
+
+concurrency:
+  group: sync-${{ github.event_name }}-${{ inputs.job || 'agendado' }}
+  cancel-in-progress: false
+
+jobs:
+  montar-matriz:
+    runs-on: ubuntu-latest
+    outputs:
+      jobs: ${{ steps.def.outputs.jobs }}
+    steps:
+      - id: def
+        run: |
+          if [ -n "${{ inputs.job }}" ]; then
+            echo 'jobs=["${{ inputs.job }}"]' >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "30 8 * * 1-6" ]; then
+            # PESADO 1x/dia: fotografias completas + janelas longas
+            echo 'jobs=["equipamentos","reservas_separacao","pecas_historico","suprimentos_compras","aprovacao_pedidos","pagamento_pedidos","migo_recebimentos"]' >> "$GITHUB_OUTPUT"
+          else
+            # OPERAÇÃO 4x/dia: o que o chão de oficina consome em tempo quase-real
+            echo 'jobs=["ordens_servico","os_operacoes","os_suprimentos","uca_patio","uca_historico","horimetros","horimetros_invalidos"]' >> "$GITHUB_OUTPUT"
+          fi
+
+  sync:
+    needs: montar-matriz
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false            # um job quebrado não derruba os demais
+      max-parallel: 2             # gentileza com a réplica
+      matrix:
+        job: ${{ fromJson(needs.montar-matriz.outputs.jobs) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependências
+        run: pip install --quiet psycopg2-binary pymysql
+
+      - name: Rodar ${{ matrix.job }}
+        env:
+          # Datalake Postgres (réplica SAP)
+          HANA_DB_HOST:      ${{ secrets.HANA_DB_HOST }}
+          HANA_DB_PORT:      ${{ secrets.HANA_DB_PORT }}
+          HANA_DB_USER:      ${{ secrets.HANA_DB_USER }}
+          HANA_DB_PASSWORD:  ${{ secrets.HANA_DB_PASSWORD }}
+          HANA_DB_NAME:      ${{ secrets.HANA_DB_NAME }}
+          # MySQL ARMAC (fastfield / total_integration / invoicecon)
+          ARMAC_DB_HOST:     ${{ secrets.ARMAC_DB_HOST }}
+          ARMAC_DB_PORT:     ${{ secrets.ARMAC_DB_PORT }}
+          ARMAC_DB_USER:     ${{ secrets.ARMAC_DB_USER }}
+          ARMAC_DB_PASSWORD: ${{ secrets.ARMAC_DB_PASSWORD }}
+          UCA_DB_NAME:       ${{ secrets.UCA_DB_NAME }}
+          # MySQL MIGO (réplica readonly)
+          MIGO_DB_HOST:      ${{ secrets.MIGO_DB_HOST }}
+          MIGO_DB_PORT:      ${{ secrets.MIGO_DB_PORT }}
+          MIGO_DB_USER:      ${{ secrets.MIGO_DB_USER }}
+          MIGO_DB_PASSWORD:  ${{ secrets.MIGO_DB_PASSWORD }}
+          MIGO_DB_NAME:      ${{ secrets.MIGO_DB_NAME }}
+          # Telemetria (engine auto por porta; force com TELEMETRIA_DB_ENGINE)
+          TELEMETRIA_DB_HOST:     ${{ secrets.TELEMETRIA_DB_HOST }}
+          TELEMETRIA_DB_PORT:     ${{ secrets.TELEMETRIA_DB_PORT }}
+          TELEMETRIA_DB_USER:     ${{ secrets.TELEMETRIA_DB_USER }}
+          TELEMETRIA_DB_PASSWORD: ${{ secrets.TELEMETRIA_DB_PASSWORD }}
+          TELEMETRIA_DB_NAME:     ${{ secrets.TELEMETRIA_DB_NAME }}
+          # App (webhooks)
+          APP_BASE_URL:        ${{ secrets.APP_BASE_URL }}
+          SYNC_WEBHOOK_SECRET: ${{ secrets.SYNC_WEBHOOK_SECRET }}
+        run: |
+          EXTRA=""
+          [ -n "${{ inputs.ini }}" ] && EXTRA="$EXTRA --ini ${{ inputs.ini }}"
+          [ -n "${{ inputs.fim }}" ] && EXTRA="$EXTRA --fim ${{ inputs.fim }}"
+          python run_sync.py --job "${{ matrix.job }}" $EXTRA
