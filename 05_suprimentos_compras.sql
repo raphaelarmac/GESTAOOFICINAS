@@ -75,6 +75,55 @@ base AS (
     -- o pipeline entrega TUDO na janela de data; a separação por grupo/
     -- comprador é feita no app, pelas colunas grupo_compras / comprador /
     -- criado_por_sap. A seletividade agora vem toda da janela de datas.
+),
+
+-- ============================================================================
+-- [OTIM r3.0] LATERALs substituídos por lookups agregados: cada tabela grande
+-- é lida UMA única vez (com filtro barato) e casada por hash join — antes,
+-- sem índice na réplica, cada linha da base varria EBKN/EKKN/EKBE/EKET/MAKT
+-- inteiras de novo (milhares de varreduras completas por execução).
+-- ============================================================================
+chaves_pedido AS (
+    SELECT DISTINCT ebeln, ebelp FROM base WHERE ebeln IS NOT NULL
+),
+
+acc AS (  -- conta contábil da RC (maior aufnr do item)
+    SELECT DISTINCT ON (n.banfn, n.bnfpo) n.banfn, n.bnfpo, n.aufnr, n.kostl
+    FROM ebkn n
+    JOIN rc ON rc.banfn = n.banfn AND rc.bnfpo = n.bnfpo
+    ORDER BY n.banfn, n.bnfpo, n.aufnr DESC NULLS LAST
+),
+
+pk AS (   -- conta contábil do pedido
+    SELECT DISTINCT ON (n.ebeln, n.ebelp) n.ebeln, n.ebelp, n.kostl
+    FROM ekkn n
+    JOIN chaves_pedido cp ON cp.ebeln = n.ebeln AND cp.ebelp = n.ebelp
+    ORDER BY n.ebeln, n.ebelp, n.kostl DESC NULLS LAST
+),
+
+receb AS (  -- quantidade recebida (EKBE vgabe=1); budat >= início da janela
+            -- (recebimento nunca antecede a criação da RC/pedido da janela)
+    SELECT x.ebeln, x.ebelp, SUM(x.menge) AS qtd_recebida
+    FROM ekbe x
+    JOIN chaves_pedido cp ON cp.ebeln = x.ebeln AND cp.ebelp = x.ebelp
+    WHERE x.vgabe = '1'
+      AND x.budat >= TO_CHAR(CURRENT_DATE - %(ini)s::int, 'YYYY-MM-DD')
+    GROUP BY x.ebeln, x.ebelp
+),
+
+sch AS (   -- primeira data de remessa programada (EKET)
+    SELECT DISTINCT ON (x.ebeln, x.ebelp) x.ebeln, x.ebelp, x.eindt
+    FROM eket x
+    JOIN chaves_pedido cp ON cp.ebeln = x.ebeln AND cp.ebelp = x.ebelp
+    ORDER BY x.ebeln, x.ebelp, x.eindt
+),
+
+m AS (     -- descrição de material em PT
+    SELECT DISTINCT ON (x.matnr) x.matnr, x.maktx
+    FROM makt x
+    JOIN (SELECT DISTINCT matnr FROM rc) mats ON mats.matnr = x.matnr
+    WHERE lower(x.spras) IN ('p', 'pt')
+    ORDER BY x.matnr, lower(x.spras)
 )
 
 SELECT
@@ -141,46 +190,12 @@ SELECT
     END AS status_processo
 
 FROM base b
-
-LEFT JOIN LATERAL (
-    SELECT n.aufnr, n.kostl
-    FROM ebkn n
-    WHERE n.banfn = b.banfn AND n.bnfpo = b.bnfpo
-    ORDER BY n.aufnr DESC NULLS LAST
-    LIMIT 1
-) acc ON TRUE
-
-LEFT JOIN LATERAL (
-    SELECT n.kostl
-    FROM ekkn n
-    WHERE n.ebeln = b.ebeln AND n.ebelp = b.ebelp
-    ORDER BY n.kostl DESC NULLS LAST
-    LIMIT 1
-) pk ON TRUE
-
-LEFT JOIN afih a  ON a.aufnr = acc.aufnr
+LEFT JOIN acc      ON acc.banfn = b.banfn AND acc.bnfpo = b.bnfpo
+LEFT JOIN pk       ON pk.ebeln  = b.ebeln AND pk.ebelp  = b.ebelp
+LEFT JOIN afih a   ON a.aufnr   = acc.aufnr
 LEFT JOIN lfa1 vend ON vend.lifnr = b.lifnr
-
-LEFT JOIN LATERAL (
-    SELECT SUM(x.menge) AS qtd_recebida
-    FROM ekbe x
-    WHERE x.ebeln = b.ebeln AND x.ebelp = b.ebelp AND x.vgabe = '1'
-) h ON TRUE
-
-LEFT JOIN LATERAL (
-    SELECT x.eindt
-    FROM eket x
-    WHERE x.ebeln = b.ebeln AND x.ebelp = b.ebelp
-    ORDER BY x.eindt
-    LIMIT 1
-) sch ON TRUE
-
-LEFT JOIN LATERAL (
-    SELECT x.maktx
-    FROM makt x
-    WHERE x.matnr = b.matnr AND lower(x.spras) IN ('p', 'pt')
-    ORDER BY x.spras
-    LIMIT 1
-) m ON TRUE
+LEFT JOIN receb h  ON h.ebeln   = b.ebeln AND h.ebelp   = b.ebelp
+LEFT JOIN sch      ON sch.ebeln = b.ebeln AND sch.ebelp = b.ebelp
+LEFT JOIN m        ON m.matnr   = b.matnr
 
 ORDER BY b.banfn ASC;

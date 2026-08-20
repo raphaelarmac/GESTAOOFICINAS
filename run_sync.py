@@ -63,8 +63,8 @@ JOBS: dict[str, dict[str, Any]] = {
                             "hook": "/api/public/hooks/sync-os-suprimentos"},        # TODO_HOOK
     "suprimentos_compras": {"sql": "05_suprimentos_compras.sql", "fonte": "pg",
                             "hook": "/api/public/hooks/sync-suprimentos-compras",
-                            "params": ("ini", "fim"), "padrao": {"ini": 30, "fim": 0},
-                            "fatia_dias": 10},   # janela quebrada em fatias de 10d (réplica mata query longa)
+                            "params": ("ini", "fim"), "padrao": {"ini": 30, "fim": 0}},
+                            # r3.0: sem fatia — a query virou hash-join de varredura única;
     "uca_patio":           {"sql": "06_uca_patio_mysql.sql",     "fonte": "armac",
                             "db": os.environ.get("UCA_DB_NAME", "fastfield"),
                             "hook": "/api/public/hooks/sync-uca-patio"},             # TODO_HOOK (hoje: sync_uca.py)
