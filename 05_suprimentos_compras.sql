@@ -30,7 +30,7 @@
 --      isso é um index-scan de 1 linha em vez de uma agregação.
 --   3. O LATERAL de MAKT (MAX(MAKTX) com SPRAS IN (...)) era executado uma vez
 --      por linha da EBAN inteira; agora só roda para os materiais do recorte.
---   4. Sem `%` na query -> nenhuma necessidade de escapar `%%` no psycopg.
+--   4. Query sem curingas LIKE -> nada a escapar para o psycopg.
 --
 -- Correção:
 --   * `E.BADAT` é texto 'YYYY-MM-DD' na réplica (por isso o TO_CHAR original).
@@ -62,7 +62,7 @@ base AS (
     -- [NACIONAL r2.1] Filtro de grupo de compras / comprador REMOVIDO:
     -- o pipeline entrega TUDO na janela de data; a separação por grupo/
     -- comprador é feita no app, pelas colunas grupo_compras / comprador /
-    -- criado_por_sap. A seletividade agora é 100% da janela %(ini)s/%(fim)s.
+    -- criado_por_sap. A seletividade agora vem toda da janela de datas.
 )
 
 SELECT
