@@ -62,8 +62,9 @@ JOBS: dict[str, dict[str, Any]] = {
     "os_suprimentos":      {"sql": "04_os_suprimentos.sql",      "fonte": "pg",
                             "hook": "/api/public/hooks/sync-os-suprimentos"},        # TODO_HOOK
     "suprimentos_compras": {"sql": "05_suprimentos_compras.sql", "fonte": "pg",
-                            "hook": "/api/public/hooks/sync-suprimentos-compras",    # TODO_HOOK
-                            "params": ("ini", "fim"), "padrao": {"ini": 30, "fim": 0}},
+                            "hook": "/api/public/hooks/sync-suprimentos-compras",
+                            "params": ("ini", "fim"), "padrao": {"ini": 30, "fim": 0},
+                            "fatia_dias": 10},   # janela quebrada em fatias de 10d (réplica mata query longa)
     "uca_patio":           {"sql": "06_uca_patio_mysql.sql",     "fonte": "armac",
                             "db": os.environ.get("UCA_DB_NAME", "fastfield"),
                             "hook": "/api/public/hooks/sync-uca-patio"},             # TODO_HOOK (hoje: sync_uca.py)
@@ -85,8 +86,9 @@ JOBS: dict[str, dict[str, Any]] = {
     "migo_recebimentos":   {"sql": "14_migo_recebimentos.sql",   "fonte": "migo",
                             "hook": "/api/public/hooks/sync-migo"},                  # hook do sync_migo.py — confirmar caminho
     "pecas_historico":     {"sql": "15_sap_pecas_historico.sql", "fonte": "pg",
-                            "hook": "/api/public/hooks/sync-pecas-historico",        # TODO_HOOK
-                            "params": ("ini", "fim"), "padrao": {"ini": 365, "fim": 0}},
+                            "hook": "/api/public/hooks/sync-pecas-historico",
+                            "params": ("ini", "fim"), "padrao": {"ini": 365, "fim": 0},
+                            "fatia_dias": 45},
 }
 
 # ----------------------------------------------------------------------------
@@ -150,6 +152,7 @@ def buscar_pg(sql: str, params: dict | None) -> list[dict]:
             conn.autocommit = True
             try:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                    cur.execute("SET work_mem = '256MB'")
                     cur.execute(sql, params or None)
                     return [dict(r) for r in cur.fetchall()]
             finally:
@@ -249,7 +252,22 @@ def rodar(job_nome: str, ini: int | None, fim: int | None) -> int:
     print(f"[{job_nome}] fonte={job['fonte']} sql={job['sql']} params={params or '-'}", flush=True)
 
     if job["fonte"] == "pg":
-        linhas = buscar_pg(sql, params or None)
+        fatia = job.get("fatia_dias")
+        if fatia and "ini" in params and "fim" in params and params["ini"] - params["fim"] > fatia:
+            # Janela longa quebrada em fatias curtas: cada statement fica rápido
+            # o bastante para a réplica não derrubar. Sem sobreposição nem furo.
+            linhas = []
+            ini, fim = params["ini"], params["fim"]
+            cortes = list(range(ini, fim, -fatia)) + [fim]
+            for i in range(len(cortes) - 1):
+                p_ini = cortes[i]
+                p_fim = cortes[i + 1] + (1 if cortes[i + 1] != fim else 0)
+                parcial = buscar_pg(sql, {"ini": p_ini, "fim": p_fim})
+                linhas.extend(parcial)
+                print(f"  fatia {i + 1}/{len(cortes) - 1} (dias {p_ini}->{p_fim}): "
+                      f"{len(parcial)} linhas", flush=True)
+        else:
+            linhas = buscar_pg(sql, params or None)
     elif job["fonte"] == "armac":
         linhas = buscar_mysql(sql, "ARMAC_DB", job.get("db"))
     elif job["fonte"] == "migo":

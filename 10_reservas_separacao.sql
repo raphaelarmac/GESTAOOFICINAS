@@ -44,6 +44,8 @@ WITH base_resb AS (
         (LPAD(TRIM(r.rsnum)::text, 10, '0') || LPAD(TRIM(r.rspos)::text, 4, '0')) AS chave_reserva
     FROM resb r
     WHERE r.lgort IN ('D005', 'D090')
+      AND COALESCE(r.xloek, '') <> 'X'          -- [OTIM r2.7] fora reservas APAGADAS
+      AND COALESCE(r.bdter, '') >= '2024-01-01' -- [OTIM r2.7] fora necessidade < 2024 (mesmo recorte das OS)
       AND r.bwart IN ('201', '261')
       AND r.sgtxt IS DISTINCT FROM 'Item não estocável'   -- (a) ver cabeçalho
       AND r.xloek IS DISTINCT FROM 'X'                    -- (b) ver cabeçalho
