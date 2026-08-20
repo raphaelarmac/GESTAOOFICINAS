@@ -43,7 +43,7 @@ WITH base_resb AS (
         r.postp, r.xwaok,
         (LPAD(TRIM(r.rsnum)::text, 10, '0') || LPAD(TRIM(r.rspos)::text, 4, '0')) AS chave_reserva
     FROM resb r
-    WHERE r.lgort IN ('D005', 'D090')
+    WHERE r.lgort = %(lgort)s   -- [OTIM r2.8] fatiado por depósito pelo runner
       AND COALESCE(r.xloek, '') <> 'X'          -- [OTIM r2.7] fora reservas APAGADAS
       AND COALESCE(r.bdter, '') >= '2024-01-01' -- [OTIM r2.7] fora necessidade < 2024 (mesmo recorte das OS)
       AND r.bwart IN ('201', '261')
@@ -136,7 +136,9 @@ status_os AS (
     JOIN jest j  ON TRIM(BOTH FROM j.objnr) = TRIM(BOTH FROM o.objnr)  -- [NACIONAL r2] padding
                 AND COALESCE(j.inact, '') <> 'X'
                 AND left(j.stat, 1) = 'E'
-    JOIN tj30t t ON TRIM(BOTH FROM t.stsma) = TRIM(BOTH FROM s.stsma)  -- [NACIONAL r2] padding AND t.estat = j.stat AND t.spras = 'P'
+    JOIN tj30t t ON TRIM(BOTH FROM t.stsma) = TRIM(BOTH FROM s.stsma)  -- [NACIONAL r2] padding
+                AND t.estat = j.stat
+                AND t.spras = 'P'
     GROUP BY o.aufnr
 ),
 

@@ -76,7 +76,11 @@ JOBS: dict[str, dict[str, Any]] = {
     "horimetros_invalidos":{"sql": "09_horimetros_invalidos_mysql.sql", "fonte": "telemetria",
                             "hook": "/api/public/hooks/sync-horimetros-invalidos"},  # TODO_HOOK
     "reservas_separacao":  {"sql": "10_reservas_separacao.sql",  "fonte": "pg",
-                            "hook": "/api/public/hooks/sync-reservas-separacao"},    # TODO_HOOK
+                            "hook": "/api/public/hooks/sync-reservas-separacao",
+                            # fatiado por depósito: statements curtos sobrevivem à réplica.
+                            # AJUSTAR a lista conforme levantamento de depósitos por filial.
+                            "fatia_valores": {"param": "lgort",
+                                              "valores": ["D005", "D090"]}},
     "aprovacao_pedidos":   {"sql": "12_aprovacao_pedidos.sql",   "fonte": "pg",
                             "hook": "/api/public/hooks/sync-aprovacao-pedidos",      # TODO_HOOK
                             "params": ("ini",), "padrao": {"ini": 7}},
@@ -251,7 +255,15 @@ def rodar(job_nome: str, ini: int | None, fim: int | None) -> int:
     inicio = datetime.now(timezone.utc).isoformat()
     print(f"[{job_nome}] fonte={job['fonte']} sql={job['sql']} params={params or '-'}", flush=True)
 
-    if job["fonte"] == "pg":
+    if job["fonte"] == "pg" and job.get("fatia_valores"):
+        fv = job["fatia_valores"]
+        linhas = []
+        for i, valor in enumerate(fv["valores"], 1):
+            parcial = buscar_pg(sql, {**params, fv["param"]: valor})
+            linhas.extend(parcial)
+            print(f"  fatia {i}/{len(fv['valores'])} ({fv['param']}={valor}): "
+                  f"{len(parcial)} linhas", flush=True)
+    elif job["fonte"] == "pg":
         fatia = job.get("fatia_dias")
         if fatia and "ini" in params and "fim" in params and params["ini"] - params["fim"] > fatia:
             # Janela longa quebrada em fatias curtas: cada statement fica rápido
