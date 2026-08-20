@@ -166,7 +166,7 @@ def buscar_mysql(sql: str, prefixo: str, db: str | None = None) -> list[dict]:
     import pymysql
     conn = pymysql.connect(
         host=_env(f"{prefixo}_HOST"),
-        port=int(os.environ.get(f"{prefixo}_PORT", "3306")),
+        port=int(os.environ.get(f"{prefixo}_PORT") or "3306"),  # "or": secret ausente vira '' no Actions
         user=_env(f"{prefixo}_USER"),
         password=_env(f"{prefixo}_PASSWORD"),
         database=db or _env(f"{prefixo}_NAME"),
