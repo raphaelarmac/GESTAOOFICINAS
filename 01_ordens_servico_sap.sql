@@ -52,7 +52,7 @@ ordens AS (
         a.erdat                                         AS data_criacao,
         a.idat1, a.idat2, a.idat3,
         a.loekz,
-        a.priok,
+        h.priok,   -- priok mora na AFIH (hint do próprio Postgres)
         NULLIF(LTRIM(TRIM(h.equnr), '0'), '')           AS ativo,
         h.ilart,
         ct.arbpl                                        AS centro_trabalho,

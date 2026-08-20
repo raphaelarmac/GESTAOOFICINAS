@@ -97,7 +97,7 @@ ordens AS (
         a.objnr,
         a.auart,
         a.ktext,
-        a.priok,
+        h.priok,   -- priok mora na AFIH
         a.kostl,
         a.erdat,
         a.ernam,
@@ -111,13 +111,14 @@ ordens AS (
         h.qmnum,
         h.warpl,
         h.wapos,
-        h.tplnr,
+        il.tplnr,  -- AFIH não tem tplnr: vem via ILOAN -> ILOA (padrão da view v1)
         c.arbpl                                AS cod_centro_trabalho,
         f.gstrp                                AS dt_inicio_base,
         f.gltrp                                AS dt_fim_base
     FROM ordens_base ob
     JOIN aufk a       ON a.aufnr = ob.aufnr
     LEFT JOIN afih h  ON h.aufnr = a.aufnr
+    LEFT JOIN iloa il ON il.iloan = h.iloan
     LEFT JOIN afko f  ON f.aufnr = a.aufnr
     LEFT JOIN crhd c  ON c.objid = h.gewrk AND UPPER(TRIM(COALESCE(c.objty, ''))) IN ('A', '')
 ),
