@@ -316,7 +316,7 @@ SELECT
     NULL::varchar                             AS email_ultimo_modificador, -- TODO(2)
     o.aedat                                   AS data_ultima_modificacao,
     NULL::varchar                             AS hora_ultima_modificacao,  -- TODO(3)
-    o.aedat::timestamp                        AS datetime_ultima_modificacao, -- TODO(3)
+    NULLIF(NULLIF(o.aedat, ''), '0000-00-00')::timestamp AS datetime_ultima_modificacao, -- data-zero SAP vira NULL
     o.warpl                                   AS n_plano_manutencao,
     NULL::varchar                             AS n_solicitacao_manutencao, -- TODO(4)
     o.wapos                                   AS n_item_manutencao,
