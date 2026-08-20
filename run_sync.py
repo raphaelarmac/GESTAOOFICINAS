@@ -94,8 +94,10 @@ JOBS: dict[str, dict[str, Any]] = {
 def _env(nome: str, *alts: str, obrigatorio: bool = True) -> str:
     for n in (nome, *alts):
         v = os.environ.get(n)
-        if v:
-            return v
+        if v and v.strip():
+            # .strip() blinda contra secrets colados com espaço/Enter no final
+            # (causa do "could not translate host name" no primeiro run).
+            return v.strip()
     if obrigatorio:
         sys.exit(f"ERRO: variável {nome} não definida")
     return ""
