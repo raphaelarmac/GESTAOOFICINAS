@@ -127,7 +127,10 @@ def jsonable(v: Any) -> Any:
 
 def _eh_conflito_replica(err: Exception) -> bool:
     t = str(err).lower()
-    return "conflict with recovery" in t or "canceling statement due to conflict" in t
+    return ("conflict with recovery" in t
+            or "canceling statement due to conflict" in t
+            or "server closed the connection" in t      # réplica derrubou query longa
+            or "terminated abnormally" in t)
 
 
 def buscar_pg(sql: str, params: dict | None) -> list[dict]:
@@ -154,7 +157,7 @@ def buscar_pg(sql: str, params: dict | None) -> list[dict]:
         except Exception as e:                                   # noqa: BLE001
             ultimo = e
             if _eh_conflito_replica(e) and tentativa < TENTATIVAS_QUERY:
-                espera = 30 * tentativa
+                espera = 45 * tentativa
                 print(f"conflito de réplica; retry em {espera}s...", flush=True)
                 time.sleep(espera)
             else:
