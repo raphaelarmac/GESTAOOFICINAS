@@ -1,18 +1,12 @@
 -- =============================================================================
--- 14_migo_recebimentos.sql
+-- 14_migo_recebimentos.sql — DIALETO MySQL 8                  [PATCH r2.5]
 -- Substitui : sync_migo.py -> QUERY
--- Destino   : public.migo_recebimentos
--- Fonte     : tabelas do app interno (não é SAP) - mantida
+-- Fonte     : MySQL (conexão MIGO_DB_*), tabelas do app interno
 --
--- Query já era enxuta. Mudanças:
---   1. A CTE `main` foi eliminada: era só uma projeção, e o CASE do SELECT
---      externo podia ser calculado no mesmo nível.
---   2. `TRIM(LEADING '0' FROM ...)` sobre um COALESCE que pode devolver ''
---      resultava em string vazia em vez de NULL. Agora sai NULL, que é o que
---      o destino espera para "sem requisição".
---   3. ORDER BY: mantido o comportamento original (status_migo ASC coloca
---      'MIGO FEITA' antes de 'MIGO PENDENTE', por ordem alfabética).
---      Adicionado NULLS LAST na data para as pendentes não subirem.
+-- Traduções vs. a versão Postgres original:
+--   * NULLS LAST não existe no MySQL -> ORDER BY (col IS NULL), col DESC
+--     (o booleano ordena os NULLs por último, mesmo efeito).
+--   * TRIM(LEADING '0' FROM ...) e NULLIF/COALESCE são idênticos nos dois.
 -- =============================================================================
 
 SELECT
@@ -30,4 +24,6 @@ SELECT
     END                                  AS status_migo
 FROM evidencia_recebimentos er
 LEFT JOIN requisicoes_de_compra rc ON rc.id = er.requisicao_de_compra_id
-ORDER BY status_migo ASC, er.data_recebimento DESC NULLS LAST;
+ORDER BY status_migo ASC,
+         (er.data_recebimento IS NULL),   -- NULLs por último (equivalente ao NULLS LAST)
+         er.data_recebimento DESC;
