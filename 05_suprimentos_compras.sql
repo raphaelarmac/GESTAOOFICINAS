@@ -48,6 +48,18 @@ WITH rc AS (
     WHERE e.badat >= TO_CHAR(CURRENT_DATE - %(ini)s::int, 'YYYY-MM-DD')
       AND e.badat <= TO_CHAR(CURRENT_DATE - %(fim)s::int, 'YYYY-MM-DD')
       AND TRIM(LEADING '0' FROM TRIM(e.matnr)) <> ''
+      -- [OTIM r2.9] Escopo da oficina POR CENTRO (werks vem sempre preenchido
+      -- na EBAN; o depósito não). Mapa VIVO via T001L: os centros são os donos
+      -- dos depósitos de separação — filial nova que adotar um desses códigos
+      -- de depósito entra sozinha, sem editar a query.
+      -- (Hoje: C002 Rondonópolis, C005 Ouro Preto, C006 BH, C007 CDP,
+      --  C013 Feira de Santana, C019 SJ dos Pinhais.)
+      -- Comprador/grupo seguem como COLUNAS — recorte por comprador é do app.
+      AND e.werks IN (
+            SELECT DISTINCT l.werks
+            FROM t001l l
+            WHERE l.lgort IN ('D005', 'D090', 'D007', 'D002', 'D123', 'D071')
+      )
 ),
 
 base AS (
