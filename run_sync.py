@@ -80,7 +80,8 @@ JOBS: dict[str, dict[str, Any]] = {
                             # fatiado por depósito: statements curtos sobrevivem à réplica.
                             # AJUSTAR a lista conforme levantamento de depósitos por filial.
                             "fatia_valores": {"param": "lgort",
-                                              "valores": ["D005", "D090"]}},
+                                              "valores": ["D005", "D090", "D007",
+                                                          "D002", "D123", "D071"]}},
     "aprovacao_pedidos":   {"sql": "12_aprovacao_pedidos.sql",   "fonte": "pg",
                             "hook": "/api/public/hooks/sync-aprovacao-pedidos",      # TODO_HOOK
                             "params": ("ini",), "padrao": {"ini": 7}},
