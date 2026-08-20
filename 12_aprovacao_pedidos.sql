@@ -1,4 +1,6 @@
 -- =============================================================================
+-- [PATCH r2.2] Datas deste lake são ISO com traço (ex.: 2024-01-02) -> TO_CHAR
+-- ajustado para YYYY-MM-DD (com YYYYMMDD o filtro retornava 0 linhas em silêncio).
 -- 12_aprovacao_pedidos.sql
 -- Substitui : sync_aprovacao_pedidos.py -> QUERY
 -- Destino   : public.aprovacao_pedidos
@@ -46,7 +48,7 @@ SELECT DISTINCT ON ("NumeroPedido", "NomeAprovador", "DataInicio", "HorarioInici
     "DataFinal"               AS data_final
 FROM bi_bs_fluxo_aprov
 -- Carga incremental: descomente depois de confirmar o tipo de "DataInicio".
--- WHERE "DataInicio" >= TO_CHAR(CURRENT_DATE - %(ini)s::int, 'YYYYMMDD')
+-- WHERE "DataInicio" >= TO_CHAR(CURRENT_DATE - %(ini)s::int, 'YYYY-MM-DD')
 ORDER BY
     "NumeroPedido", "NomeAprovador", "DataInicio", "HorarioInicioAprovacao",
     "HorarioFinalAprovacao" DESC;
@@ -78,4 +80,4 @@ ORDER BY
 -- LEFT JOIN usr21 u ON TRIM(u.bname) = TRIM(w.wi_aagent)
 -- LEFT JOIN adrp ag ON TRIM(ag.persnumber) = TRIM(u.persnumber)
 -- WHERE w.wi_type = 'W'
---   AND w.wi_cd >= TO_CHAR(CURRENT_DATE - %(ini)s::int, 'YYYYMMDD');
+--   AND w.wi_cd >= TO_CHAR(CURRENT_DATE - %(ini)s::int, 'YYYY-MM-DD');

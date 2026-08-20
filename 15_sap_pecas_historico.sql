@@ -4,7 +4,8 @@
 -- Destino   : public.sap_pecas_historico
 -- Fonte     : já era nativa (AFIH/RESB/AUFK/EQKT/MAKT/MARA)
 --
--- Parâmetros: %(ini)s e %(fim)s = datas de criação da ordem (AUFK.ERDAT).
+-- Parâmetros: %(ini)s e %(fim)s = Nº DE DIAS para trás (padronizado com as
+-- demais queries do runner; ex.: ini=365, fim=0 = último ano). [PATCH r2.2]
 --
 -- >>> O PROBLEMA PRINCIPAL DESTA QUERY <<<
 --
@@ -41,8 +42,8 @@ WITH ordens AS (
         h.equnr
     FROM aufk a
     JOIN afih h ON h.aufnr = a.aufnr
-    WHERE a.erdat >= %(ini)s
-      AND a.erdat <= %(fim)s
+    WHERE a.erdat >= TO_CHAR(CURRENT_DATE - %(ini)s::int, 'YYYY-MM-DD')
+      AND a.erdat <= TO_CHAR(CURRENT_DATE - %(fim)s::int, 'YYYY-MM-DD')
       AND h.equnr IS NOT NULL
       AND TRIM(h.equnr) <> ''
 ),

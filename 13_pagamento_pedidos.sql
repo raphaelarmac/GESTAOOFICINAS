@@ -1,4 +1,6 @@
 -- =============================================================================
+-- [PATCH r2.2] Datas deste lake são ISO com traço (ex.: 2024-01-02) -> TO_CHAR
+-- ajustado para YYYY-MM-DD (com YYYYMMDD o filtro retornava 0 linhas em silêncio).
 -- 13_pagamento_pedidos.sql                                   [NACIONAL r2.1]
 -- MUDANÇA r2.1 (19/08/2026): filtro de ekgrp/ernam removido — todos os pedidos
 -- da janela, com grupo_compras e criado_por_sap como colunas para o app.
@@ -32,7 +34,7 @@ WITH pedidos AS (
     -- janela. Separação por grupo/comprador é feita no app pelas colunas novas.
     SELECT k.ebeln, k.ekgrp, k.ernam
     FROM ekko k
-    WHERE k.bedat >= TO_CHAR(CURRENT_DATE - %(ini)s::int, 'YYYYMMDD')
+    WHERE k.bedat >= TO_CHAR(CURRENT_DATE - %(ini)s::int, 'YYYY-MM-DD')
       -- AND EXISTS (SELECT 1 FROM ekpo p WHERE p.ebeln = k.ebeln)
 ),
 

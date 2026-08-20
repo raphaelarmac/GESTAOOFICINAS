@@ -51,7 +51,7 @@ ordens AS (
     FROM aufk a
     JOIN afih h  ON h.aufnr = a.aufnr
     LEFT JOIN ct ON ct.objid = h.gewrk                 -- [NACIONAL r2] LEFT
-    WHERE a.erdat >= DATE '2024-01-01'
+    WHERE a.erdat >= '2024-01-01'   -- erdat é VARCHAR neste lake (ISO); comparação textual usa o índice
       AND h.ilart IN ('PRP', 'OFI')
       AND h.equnr IS NOT NULL
       AND TRIM(h.equnr) <> ''

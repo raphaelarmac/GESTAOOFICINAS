@@ -1,4 +1,6 @@
 -- =============================================================================
+-- [PATCH r2.2] Datas deste lake são ISO com traço (ex.: 2024-01-02) -> TO_CHAR
+-- ajustado para YYYY-MM-DD (com YYYYMMDD o filtro retornava 0 linhas em silêncio).
 -- 05_suprimentos_compras.sql                                 [NACIONAL r2.1]
 -- MUDANÇA r2.1 (19/08/2026): filtros de ekgrp/ernam removidos — traz TODAS as
 -- requisições/pedidos da janela; app separa por grupo_compras/comprador.
@@ -31,7 +33,7 @@
 --   4. Sem `%` na query -> nenhuma necessidade de escapar `%%` no psycopg.
 --
 -- Correção:
---   * `E.BADAT` é texto 'YYYYMMDD' na réplica (por isso o TO_CHAR original).
+--   * `E.BADAT` é texto 'YYYY-MM-DD' na réplica (por isso o TO_CHAR original).
 --     Isso foi mantido de propósito: comparar texto com texto preserva o
 --     índice. Se você migrar BADAT para DATE, troque as duas linhas do recorte
 --     por comparação com CURRENT_DATE - %(ini)s.
@@ -43,8 +45,8 @@ WITH rc AS (
         e.banfn, e.bnfpo, e.matnr, e.txz01, e.menge, e.preis,
         e.ekgrp, e.ernam, e.badat, e.knttp, e.loekz
     FROM eban e
-    WHERE e.badat >= TO_CHAR(CURRENT_DATE - %(ini)s::int, 'YYYYMMDD')
-      AND e.badat <= TO_CHAR(CURRENT_DATE - %(fim)s::int, 'YYYYMMDD')
+    WHERE e.badat >= TO_CHAR(CURRENT_DATE - %(ini)s::int, 'YYYY-MM-DD')
+      AND e.badat <= TO_CHAR(CURRENT_DATE - %(fim)s::int, 'YYYY-MM-DD')
       AND TRIM(LEADING '0' FROM TRIM(e.matnr)) <> ''
 ),
 
