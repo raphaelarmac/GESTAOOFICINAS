@@ -35,7 +35,7 @@ txt_atividade AS (
     SELECT DISTINCT ON (t.ilart) t.ilart, t.ilatx
     FROM t353i_t t
     WHERE t.spras = 'P'
-    ORDER BY t.ilart, t.iwerk
+    ORDER BY t.ilart, t.ilatx          -- desempate por texto (t353i_t não tem iwerk)
 ),
 
 txt_prioridade AS (
