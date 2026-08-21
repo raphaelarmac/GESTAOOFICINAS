@@ -82,19 +82,23 @@ ultima_ordem AS (
 ),
 
 desc_ativo AS (
-    SELECT DISTINCT ON (k.equnr) k.equnr, k.eqktx
+    -- [PATCH r2.6-15] chaves normalizadas nos DOIS lados: nesta réplica o
+    -- padding difere entre tabelas (mesmo caso do JEST) e o lookup zerava.
+    SELECT DISTINCT ON (LTRIM(TRIM(k.equnr), '0'))
+           LTRIM(TRIM(k.equnr), '0') AS equnr_norm, k.eqktx
     FROM eqkt k
     WHERE lower(k.spras) IN ('p', 'pt')
-      AND k.equnr IN (SELECT DISTINCT equnr FROM agregado)
-    ORDER BY k.equnr, k.spras
+      AND LTRIM(TRIM(k.equnr), '0') IN (SELECT DISTINCT LTRIM(TRIM(equnr), '0') FROM agregado)
+    ORDER BY LTRIM(TRIM(k.equnr), '0'), k.spras
 ),
 
 desc_material AS (
-    SELECT DISTINCT ON (m.matnr) m.matnr, m.maktx
+    SELECT DISTINCT ON (LTRIM(TRIM(m.matnr), '0'))
+           LTRIM(TRIM(m.matnr), '0') AS matnr_norm, m.maktx
     FROM makt m
     WHERE lower(m.spras) IN ('p', 'pt')
-      AND m.matnr IN (SELECT DISTINCT matnr FROM agregado)
-    ORDER BY m.matnr, m.spras
+      AND LTRIM(TRIM(m.matnr), '0') IN (SELECT DISTINCT LTRIM(TRIM(matnr), '0') FROM agregado)
+    ORDER BY LTRIM(TRIM(m.matnr), '0'), m.spras
 )
 
 SELECT
@@ -109,7 +113,7 @@ SELECT
     a.ultima_data
 FROM agregado a
 LEFT JOIN ultima_ordem uo  ON uo.equnr = a.equnr AND uo.matnr = a.matnr
-LEFT JOIN desc_ativo da    ON da.equnr = a.equnr
-LEFT JOIN desc_material dm ON dm.matnr = a.matnr
-LEFT JOIN mara             ON mara.matnr = a.matnr
+LEFT JOIN desc_ativo da    ON da.equnr_norm = LTRIM(TRIM(a.equnr), '0')
+LEFT JOIN desc_material dm ON dm.matnr_norm = LTRIM(TRIM(a.matnr), '0')
+LEFT JOIN mara             ON LTRIM(TRIM(mara.matnr), '0') = LTRIM(TRIM(a.matnr), '0')
 ORDER BY 1, 3;
